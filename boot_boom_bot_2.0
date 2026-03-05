@@ -1,0 +1,212 @@
+from machine import Pin, PWM
+import network
+import socket
+import time
+
+# =========================
+# Pines
+# =========================
+pin_izquierda = 5
+pin_derecha = 27
+pin_led = 2
+
+izquierda = PWM(Pin(pin_izquierda))
+derecha = PWM(Pin(pin_derecha))
+led = Pin(pin_led, Pin.OUT)
+
+FRECUENCIA_PWM = 50
+
+SSID = "Red_local"
+PASSWORD = "poner contraseña"
+
+
+# =========================
+# WiFi estable
+# =========================
+def connect_wifi():
+    sta = network.WLAN(network.STA_IF)
+
+    sta.active(False)
+    time.sleep(1)
+    sta.active(True)
+
+    if not sta.isconnected():
+        print("Conectando WiFi...")
+        sta.connect(SSID, PASSWORD)
+
+        while not sta.isconnected():
+            time.sleep(0.2)
+
+    print("IP:", sta.ifconfig()[0])
+
+
+# =========================
+# Servidor Web estable
+# =========================
+def start_server():
+
+    addr = socket.getaddrinfo('0.0.0.0', 80)[0][-1]
+
+    s = socket.socket()
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # evita puerto ocupado
+    s.bind(addr)
+    s.listen(1)
+    s.settimeout(1)  
+
+    print("Servidor en", addr)
+
+    while True:
+
+        try:
+            conn, addr = s.accept()
+        except OSError:
+            continue
+
+        request = str(conn.recv(1024))
+
+        if '/LED=ON' in request:
+            led.on()
+
+        elif '/LED=OFF' in request:
+            led.off()
+
+        elif '/adelante' in request:
+            movimiento_adelante()
+
+        elif '/atras' in request:
+            movimiento_atras()
+
+        elif '/izquierda' in request:
+            movimiento_izquierda()
+
+        elif '/derecha' in request:
+            movimiento_derecha()
+
+        elif '/stop' in request:
+            detener_servos()
+
+        response = """HTTP/1.1 200 OK
+Content-Type: text/html
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+body{
+    background:#71dbdb;
+    font-family:Arial;
+    text-align:center;
+}
+
+h2{
+    margin-top:20px;
+}
+
+.grid{
+    display:grid;
+    grid-template-columns:120px 120px 120px;
+    grid-template-rows:120px 120px 120px;
+    justify-content:center;
+    gap:12px;
+    margin-top:40px;
+}
+
+.btn{
+    font-size:48px;
+    border:none;
+    border-radius:20px;
+    background:#70259b;
+    color:white;
+    width:120px;
+    height:120px;
+}
+
+.btn:active{
+    background:#4e1a70;
+}
+
+.led{
+    font-size:18px;
+    padding:10px 20px;
+    margin:5px;
+}
+</style>
+</head>
+
+<body>
+
+<h2>Control Boom-Bot</h2>
+
+<p>
+<a href="/LED=ON"><button class="led">LED ON</button></a>
+<a href="/LED=OFF"><button class="led">LED OFF</button></a>
+</p>
+
+<div class="grid">
+
+    <div></div>
+    <a href="/adelante"><button class="btn">&#8593;</button></a>
+    <div></div>
+
+    <a href="/izquierda"><button class="btn">&#8592;</button></a>
+    <a href="/stop"><button class="btn">&#9632;</button></a>
+    <a href="/derecha"><button class="btn">&#8594;</button></a>
+
+    <div></div>
+    <a href="/atras"><button class="btn">&#8595;</button></a>
+    <div></div>
+
+</div>
+
+</body>
+</html>
+"""
+        conn.send(response)
+        conn.close()
+
+
+# =========================
+# Movimientos servos
+# =========================
+def movimiento_atras():
+    izquierda.freq(FRECUENCIA_PWM)
+    izquierda.duty(130)
+    derecha.freq(FRECUENCIA_PWM)
+    derecha.duty(25)
+
+
+def movimiento_adelante():
+    izquierda.freq(FRECUENCIA_PWM)
+    izquierda.duty(25)
+    derecha.freq(FRECUENCIA_PWM)
+    derecha.duty(130)
+
+
+def movimiento_derecha():
+    izquierda.freq(FRECUENCIA_PWM)
+    izquierda.duty(120)
+    derecha.freq(FRECUENCIA_PWM)
+    derecha.duty(120)
+
+
+def movimiento_izquierda():
+    izquierda.freq(FRECUENCIA_PWM)
+    izquierda.duty(25)
+    derecha.freq(FRECUENCIA_PWM)
+    derecha.duty(25)
+
+
+def detener_servos():
+    izquierda.duty(0)
+    derecha.duty(0)
+
+
+# =========================
+# Inicio
+# =========================
+detener_servos()
+connect_wifi()
+start_server()
